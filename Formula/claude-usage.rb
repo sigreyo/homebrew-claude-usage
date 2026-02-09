@@ -3,8 +3,8 @@ class ClaudeUsage < Formula
 
   desc "SwiftBar plugin that monitors Claude.ai usage in the macOS menu bar"
   homepage "https://github.com/sigreyo/homebrew-claude-usage"
-  url "https://github.com/sigreyo/homebrew-claude-usage/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "b6e044efda44a644c1e932840dc0f4d3543997bd0c3710ad59cbeaad7a8d39f9"
+  url "https://github.com/sigreyo/homebrew-claude-usage/archive/refs/tags/v0.1.1.tar.gz"
+  sha256 "c86088129042afdda2d01eb5cff87e4a8bee352b285217a7f6d53d165fc94cfc"
   license "MIT"
 
   depends_on "python@3.13"
