@@ -12,7 +12,7 @@ from pathlib import Path
 
 CACHE_FILE = Path.home() / ".config/claude-usage/last_usage.json"
 STATE_FILE = Path.home() / ".config/claude-usage/notification_state.json"
-SCRAPE_SCRIPT = Path(__file__).parent / "scrape_usage.py"
+SCRAPE_SCRIPT = Path(__file__).resolve().parent / "scrape_usage.py"
 
 WARN_THRESHOLD = 75  # Percentage
 

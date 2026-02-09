@@ -14,22 +14,25 @@ brew install claude-usage
 ```bash
 # Install SwiftBar if you don't have it
 brew install --cask swiftbar
-
-# Run one-time setup (symlinks plugin + installs Playwright browser)
-claude-usage-setup
-
-# Log in to Claude.ai
-claude-usage-login
 ```
 
-Open SwiftBar and the usage monitor will appear in your menu bar, refreshing every 5 minutes.
+Open SwiftBar — when prompted for a Plugin Folder, pick any folder (e.g. `~/Library/Application Support/SwiftBar`).
+
+```bash
+# Run one-time setup (symlinks plugin into your SwiftBar folder)
+claude-usage-setup
+```
+
+Make sure you're logged into claude.ai in your browser (Chrome/Firefox/Safari). The usage monitor will appear in your menu bar, refreshing every 5 minutes.
+
+If cookies can't be read from your browser, run `claude-usage-login` as a fallback.
 
 ## Commands
 
 | Command | Description |
 |---|---|
-| `claude-usage-setup` | One-time setup: symlink plugin into SwiftBar, install Playwright Chromium |
-| `claude-usage-login` | Open browser to authenticate with Claude.ai |
+| `claude-usage-setup` | One-time setup: symlink plugin into SwiftBar |
+| `claude-usage-login` | Fallback: open browser to authenticate if cookies can't be read |
 | `claude-usage-scrape` | Manually trigger a usage scrape |
 
 ## How It Works
@@ -52,7 +55,7 @@ Desktop notifications are sent when usage exceeds 75%.
 All user data is stored in `~/.config/claude-usage/`:
 - `last_usage.json` - cached usage data
 - `notification_state.json` - notification tracking
-- `browser-data/` - Playwright browser profile
+- `browser-data/` - browser profile (only if claude-usage-login was used)
 
 ## Uninstall
 

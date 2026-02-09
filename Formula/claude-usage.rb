@@ -156,21 +156,18 @@ class ClaudeUsage < Formula
       chmod +x "$LIBEXEC/claude-usage.5m.py"
       echo "Symlinked plugin into SwiftBar directory."
 
-      # Install Playwright browsers
-      echo ""
-      echo "Installing Playwright Chromium browser..."
-      "$LIBEXEC/bin/playwright" install chromium
-      echo ""
-
       # Create config directory
       mkdir -p "${HOME}/.config/claude-usage"
 
+      echo ""
       echo "Setup complete!"
       echo ""
       echo "Next steps:"
       echo "  1. Open SwiftBar (brew install --cask swiftbar)"
-      echo "  2. Run: claude-usage-login"
+      echo "  2. Make sure you're logged into claude.ai in your browser (Chrome/Firefox/Safari)"
       echo "  3. The usage monitor will appear in your menu bar"
+      echo ""
+      echo "If cookies can't be read from your browser, run: claude-usage-login"
     BASH
 
     (bin/"claude-usage-login").write <<~BASH
@@ -196,14 +193,16 @@ class ClaudeUsage < Formula
         1. Install SwiftBar (if not already installed):
              brew install --cask swiftbar
 
-        2. Run the setup script:
+        2. Open SwiftBar — when prompted for a Plugin Folder, pick any folder
+           (e.g. ~/Library/Application Support/SwiftBar).
+
+        3. Run the setup script:
              claude-usage-setup
 
-        3. Log in to Claude.ai:
-             claude-usage-login
-
-        4. Open SwiftBar and point it to your plugin directory.
+        4. Make sure you're logged into claude.ai in your browser.
            The usage monitor will appear in your menu bar.
+
+      If cookies can't be read from your browser, run: claude-usage-login
 
       Data is stored in ~/.config/claude-usage/
     EOS
