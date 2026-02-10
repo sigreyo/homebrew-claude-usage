@@ -50,71 +50,18 @@ class ClaudeUsage < Formula
     sha256 "71909758f010c82bc99b0abf4ea12012c98962fbf0583c2164f8b84533c2e4da"
   end
 
-  resource "greenlet" do
-    url "https://files.pythonhosted.org/packages/8a/99/1cd3411c56a410994669062bd73dd58270c00cc074cac15f385a1fd91f8a/greenlet-3.3.1.tar.gz"
-    sha256 "41848f3230b58c08bb43dee542e74a2a2e34d3c59dc3076cec9151aeeedcae98"
-  end
-
-  resource "pyee" do
-    url "https://files.pythonhosted.org/packages/95/03/1fd98d5841cd7964a27d729ccf2199602fe05eb7a405c1462eb7277945ed/pyee-13.0.0.tar.gz"
-    sha256 "b391e3c5a434d1f5118a25615001dbc8f669cf410ab67d04c4d4e07c55481c37"
-  end
-
-  resource "typing-extensions" do
-    url "https://files.pythonhosted.org/packages/72/94/1a15dd82efb362ac84269196e94cf00f187f7ed21c242792a923cdb1c61f/typing_extensions-4.15.0.tar.gz"
-    sha256 "0cea48d173cc12fa28ecabc3b837ea3cf6f38c6d1136f85cbaaf598984861466"
-  end
-
-  resource "Jinja2" do
-    url "https://files.pythonhosted.org/packages/df/bf/f7da0350254c0ed7c72f3e33cef02e048281fec7ecec5f032d4aac52226b/jinja2-3.1.6.tar.gz"
-    sha256 "0137fb05990d35f1275a587e9aee6d56da821fc83491a0fb838183be43f66d6d"
-  end
-
-  resource "MarkupSafe" do
-    url "https://files.pythonhosted.org/packages/7e/99/7690b6d4034fffd95959cbe0c02de8deb3098cc577c67bb6a24fe5d7caa7/markupsafe-3.0.3.tar.gz"
-    sha256 "722695808f4b6457b320fdc131280796bdceb04ab50fe1795cd540799ebe1698"
-  end
-
-  on_arm do
-    resource "playwright" do
-      url "https://files.pythonhosted.org/packages/e0/40/59d34a756e02f8c670f0fee987d46f7ee53d05447d43cd114ca015cb168c/playwright-1.58.0-py3-none-macosx_11_0_arm64.whl"
-      sha256 "70c763694739d28df71ed578b9c8202bb83e8fe8fb9268c04dd13afe36301f71"
-    end
-  end
-
-  on_intel do
-    resource "playwright" do
-      url "https://files.pythonhosted.org/packages/f8/c9/9c6061d5703267f1baae6a4647bfd1862e386fbfdb97d889f6f6ae9e3f64/playwright-1.58.0-py3-none-macosx_10_13_x86_64.whl"
-      sha256 "96e3204aac292ee639edbfdef6298b4be2ea0a55a16b7068df91adac077cc606"
-    end
-  end
-
-  resource "playwright-stealth" do
-    url "https://files.pythonhosted.org/packages/65/f4/57d20b4c26b8639d87a72f241e7d3279ff627554d95fd1ff42f87db3c2f3/playwright_stealth-2.0.1.tar.gz"
-    sha256 "a36f735d61469c12bda179b58d5fc4228bbee61c9cf5b1343b1497a5fd51ec1a"
-  end
-
   def install
-    # Create virtualenv and install sdist dependencies
+    # Create virtualenv and install dependencies
     venv = virtualenv_create(libexec, "python3.13")
-    venv.pip_install resources.reject { |r| r.name == "playwright" }
-
-    # Playwright is wheel-only (no sdist): symlink with correct .whl name so pip accepts it
-    resource("playwright").fetch
-    cached = resource("playwright").cached_download
-    whl_name = File.basename(resource("playwright").url)
-    whl_link = cached.dirname/whl_name
-    ln_s cached, whl_link unless whl_link.exist?
-    system libexec/"bin"/"python3", "-m", "pip", "install", "--no-deps", whl_link.to_s
+    venv.pip_install resources
 
     # Copy plugin scripts into libexec (co-located with the venv)
     libexec.install "src/claude-usage.5m.py"
     libexec.install "src/scrape_usage.py"
-    libexec.install "src/login.py"
 
     # Rewrite shebangs to use the virtualenv python (so imports resolve correctly)
     venv_python = libexec/"bin"/"python3"
-    [libexec/"claude-usage.5m.py", libexec/"scrape_usage.py", libexec/"login.py"].each do |script|
+    [libexec/"claude-usage.5m.py", libexec/"scrape_usage.py"].each do |script|
       inreplace script, "#!/usr/bin/env python3", "#!#{venv_python}"
     end
 
@@ -164,15 +111,8 @@ class ClaudeUsage < Formula
       echo ""
       echo "Next steps:"
       echo "  1. Open SwiftBar (brew install --cask swiftbar)"
-      echo "  2. Make sure you're logged into claude.ai in your browser (Chrome/Firefox/Safari)"
+      echo "  2. Make sure you're logged into claude.ai in your browser (Chrome, Brave, Firefox, or Safari)"
       echo "  3. The usage monitor will appear in your menu bar"
-      echo ""
-      echo "If cookies can't be read from your browser, run: claude-usage-login"
-    BASH
-
-    (bin/"claude-usage-login").write <<~BASH
-      #!/bin/bash
-      exec "#{libexec}/bin/python3" "#{libexec}/login.py" "$@"
     BASH
 
     (bin/"claude-usage-scrape").write <<~BASH
@@ -182,7 +122,6 @@ class ClaudeUsage < Formula
 
     # Make wrapper scripts executable
     chmod 0755, bin/"claude-usage-setup"
-    chmod 0755, bin/"claude-usage-login"
     chmod 0755, bin/"claude-usage-scrape"
   end
 
@@ -199,10 +138,9 @@ class ClaudeUsage < Formula
         3. Run the setup script:
              claude-usage-setup
 
-        4. Make sure you're logged into claude.ai in your browser.
+        4. Make sure you're logged into claude.ai in your browser
+           (Chrome, Brave, Firefox, or Safari).
            The usage monitor will appear in your menu bar.
-
-      If cookies can't be read from your browser, run: claude-usage-login
 
       Data is stored in ~/.config/claude-usage/
     EOS

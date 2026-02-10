@@ -162,16 +162,16 @@ def main():
     # Handle errors
     if "error" in usage:
         error_msg = usage["error"]
-        if "Not logged in" in error_msg or "login.py" in error_msg:
+        if "Not logged in" in error_msg or "Not authenticated" in error_msg:
             print("🔑 Login | color=orange")
             print("---")
             print("Not logged in to Claude.ai | color=red")
-            print("Run: claude-usage-login | color=gray font=Menlo size=11")
+            print("Log in at claude.ai in your browser | color=gray size=11")
         elif "expired" in error_msg.lower():
             print("🔑 Expired | color=orange")
             print("---")
             print("Session expired | color=red")
-            print("Run: claude-usage-login | color=gray font=Menlo size=11")
+            print("Log in at claude.ai in your browser | color=gray size=11")
         else:
             print("⚠️ Error | color=red")
             print("---")
@@ -248,7 +248,6 @@ def main():
     print("Refresh | refresh=true")
     print("---")
     print("Open Claude Settings | href=https://claude.ai/settings/usage")
-    print("Re-login | terminal=true bash=claude-usage-login")
 
 if __name__ == "__main__":
     main()

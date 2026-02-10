@@ -23,6 +23,7 @@ def get_browser_cookies():
     # Try browsers in order of preference
     browsers = [
         ("Chrome", browser_cookie3.chrome),
+        ("Brave", browser_cookie3.brave),
         ("Firefox", browser_cookie3.firefox),
         ("Safari", browser_cookie3.safari),
         ("Edge", browser_cookie3.edge),
