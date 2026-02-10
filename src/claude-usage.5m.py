@@ -12,12 +12,39 @@ from pathlib import Path
 
 CACHE_FILE = Path.home() / ".config/claude-usage/last_usage.json"
 STATE_FILE = Path.home() / ".config/claude-usage/notification_state.json"
+CONFIG_FILE = Path.home() / ".config/claude-usage/config.json"
 SCRIPT_DIR = Path(__file__).resolve().parent
 SCRAPE_SCRIPT = SCRIPT_DIR / "scrape_usage.py"
 if not SCRAPE_SCRIPT.exists():
     SCRAPE_SCRIPT = Path.home() / ".config/claude-usage/scrape_usage.py"
 
 WARN_THRESHOLD = 75  # Percentage
+
+
+def load_config() -> dict:
+    """Load config, creating default if missing."""
+    if CONFIG_FILE.exists():
+        try:
+            return json.loads(CONFIG_FILE.read_text())
+        except Exception:
+            pass
+    config = {"display_org": "auto"}
+    CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    CONFIG_FILE.write_text(json.dumps(config, indent=2))
+    return config
+
+
+def get_display_org(orgs: list, config: dict) -> dict | None:
+    """Determine which org to display in menu bar."""
+    if not orgs:
+        return None
+    display = config.get("display_org", "auto")
+    if display != "auto":
+        for org in orgs:
+            if org["id"] == display:
+                return org
+    # Auto: pick the org with the highest session usage
+    return max(orgs, key=lambda o: (o.get("session") or {}).get("percent", 0))
 
 def send_notification(title: str, message: str):
     """Send macOS notification"""
@@ -88,7 +115,37 @@ def run_scraper() -> dict:
     except Exception as e:
         return {"error": str(e)}
 
+def handle_set_org():
+    """Handle --set-org CLI argument to update config."""
+    if len(sys.argv) >= 3 and sys.argv[1] == "--set-org":
+        org_value = sys.argv[2]
+        config = load_config()
+        config["display_org"] = org_value
+        CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        CONFIG_FILE.write_text(json.dumps(config, indent=2))
+        sys.exit(0)
+
+
+def _migrate_legacy_cache(usage: dict) -> dict:
+    """Convert old single-org cache format to multi-org format."""
+    if "orgs" in usage:
+        return usage
+    # Old format had session/weekly at top level
+    org_entry = {
+        "id": usage.get("org_id", "unknown"),
+        "name": "Default",
+        "session": usage.get("session"),
+        "weekly": usage.get("weekly"),
+    }
+    return {"orgs": [org_entry], "cached": usage.get("cached")}
+
+
 def main():
+    # Handle config-write action before anything else
+    handle_set_org()
+
+    config = load_config()
+
     # Try to get fresh data
     usage = run_scraper()
 
@@ -99,10 +156,8 @@ def main():
             if "error" not in cached:
                 usage = cached
                 usage["cached"] = True
-        except:
+        except Exception:
             pass
-
-    state = load_notification_state()
 
     # Handle errors
     if "error" in usage:
@@ -125,29 +180,32 @@ def main():
         print("Refresh | refresh=true")
         return
 
-    # Extract percentages
-    session_pct = 0
-    weekly_pct = 0
+    # Migrate legacy single-org cache format if needed
+    usage = _migrate_legacy_cache(usage)
 
-    if usage.get("session") and "percent" in usage["session"]:
-        session_pct = usage["session"]["percent"]
+    orgs = usage.get("orgs", [])
+    cached = usage.get("cached", False)
+    display_org = get_display_org(orgs, config)
 
-    if usage.get("weekly") and "percent" in usage["weekly"]:
-        weekly_pct = usage["weekly"]["percent"]
+    state = load_notification_state()
 
-    # Always show session % in the menu bar
+    # Determine menu bar display from the selected org
+    session_pct = (display_org.get("session") or {}).get("percent", 0) if display_org else 0
+    weekly_pct = (display_org.get("weekly") or {}).get("percent", 0) if display_org else 0
+    org_label = display_org["name"] if display_org else "?"
+
     main_pct = session_pct
     main_color = get_color(main_pct)
 
-    # Check thresholds and notify
+    # Check thresholds and notify (for display org)
     if session_pct >= WARN_THRESHOLD and not state.get("notified_session"):
-        send_notification("Claude Usage Alert", f"Session usage at {session_pct:.0f}%")
+        send_notification("Claude Usage Alert", f"Session usage at {session_pct:.0f}% ({org_label})")
         state["notified_session"] = True
     elif session_pct < WARN_THRESHOLD * 0.8:
         state["notified_session"] = False
 
     if weekly_pct >= WARN_THRESHOLD and not state.get("notified_weekly"):
-        send_notification("Claude Usage Alert", f"Weekly usage at {weekly_pct:.0f}%")
+        send_notification("Claude Usage Alert", f"Weekly usage at {weekly_pct:.0f}% ({org_label})")
         state["notified_weekly"] = True
     elif weekly_pct < WARN_THRESHOLD * 0.8:
         state["notified_weekly"] = False
@@ -155,34 +213,36 @@ def main():
     state["last_session_pct"] = session_pct
     save_notification_state(state)
 
-    # SwiftBar output - use SF Symbol for menu bar
+    # --- SwiftBar output ---
     sficon = get_icon(main_pct)
-    cached_indicator = " (cached)" if usage.get("cached") else ""
-    print(f"{main_pct:.0f}%{cached_indicator} | sfSymbol={sficon} sfColor={main_color} color={main_color}")
+    cached_indicator = " (cached)" if cached else ""
+    short_label = f" ({org_label})" if len(orgs) > 1 else ""
+    print(f"{main_pct:.0f}%{short_label}{cached_indicator} | sfSymbol={sficon} sfColor={main_color} color={main_color}")
     print("---")
 
-    # Session usage (5-hour window)
-    print("Session (5-hour) | size=14")
-    print(f"{get_bar(session_pct)} {session_pct:.1f}% | font=Menlo color={get_color(session_pct)}")
-    if usage.get("session", {}).get("resets_at"):
-        print(f"Resets: {usage['session']['resets_at']} | font=Menlo size=11 color=gray")
-    print("---")
+    # Per-org sections
+    this_script = str(Path(__file__).resolve())
+    for org in orgs:
+        o_session = (org.get("session") or {}).get("percent", 0)
+        o_weekly = (org.get("weekly") or {}).get("percent", 0)
+        print(f"{org['name']} | size=14")
+        print(f"  Session: {get_bar(o_session)} {o_session:.1f}% | font=Menlo color={get_color(o_session)}")
+        if (org.get("session") or {}).get("resets_at"):
+            print(f"  Resets: {org['session']['resets_at']} | font=Menlo size=11 color=gray")
+        print(f"  Weekly:  {get_bar(o_weekly)} {o_weekly:.1f}% | font=Menlo color={get_color(o_weekly)}")
+        if (org.get("weekly") or {}).get("resets_at"):
+            print(f"  Resets: {org['weekly']['resets_at']} | font=Menlo size=11 color=gray")
+        print("---")
 
-    # Weekly usage (7-day)
-    print("Weekly (7-day) | size=14")
-    if usage.get("weekly"):
-        print(f"{get_bar(weekly_pct)} {weekly_pct:.1f}% | font=Menlo color={get_color(weekly_pct)}")
-        if usage["weekly"].get("resets_at"):
-            print(f"Resets: {usage['weekly']['resets_at']} | font=Menlo size=11 color=gray")
-    else:
-        print(f"{get_bar(0)} No data | font=Menlo color=gray")
-    print("---")
-
-    # Show API data status
-    if usage.get("api_data"):
-        print("API Status: Connected | color=green size=11")
-    else:
-        print("API Status: No data | color=orange size=11")
+    # Org switching submenu
+    current_display = config.get("display_org", "auto")
+    is_auto = current_display == "auto"
+    auto_check = "✓ " if is_auto else ""
+    print("Display Org | size=12")
+    print(f"--{auto_check}Auto (highest) | terminal=false refresh=true bash={sys.executable} param1={this_script} param2=--set-org param3=auto")
+    for org in orgs:
+        check = "✓ " if current_display == org["id"] else ""
+        print(f"--{check}{org['name']} | terminal=false refresh=true bash={sys.executable} param1={this_script} param2=--set-org param3={org['id']}")
     print("---")
 
     print("Refresh | refresh=true")

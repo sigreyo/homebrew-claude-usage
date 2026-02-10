@@ -73,15 +73,40 @@ def parse_usage_text(text: str) -> dict | None:
 
     return None
 
+def _parse_org_usage(api: dict) -> dict:
+    """Parse usage data from a single org's API response."""
+    result = {"session": None, "weekly": None}
+
+    # Session usage (5-hour window)
+    if api.get("five_hour") and api["five_hour"].get("utilization") is not None:
+        result["session"] = {
+            "percent": api["five_hour"]["utilization"],
+            "resets_at": api["five_hour"].get("resets_at"),
+        }
+
+    # Weekly usage (7-day) - check various fields
+    weekly_fields = ["seven_day", "seven_day_sonnet", "seven_day_opus"]
+    for field in weekly_fields:
+        if api.get(field) and isinstance(api[field], dict):
+            if api[field].get("utilization") is not None:
+                result["weekly"] = {
+                    "percent": api[field]["utilization"],
+                    "resets_at": api[field].get("resets_at"),
+                    "source": field,
+                }
+                break
+
+    return result
+
+
 def scrape_usage() -> dict:
-    """Scrape usage from claude.ai using browser cookies"""
+    """Scrape usage from claude.ai for all organizations using browser cookies"""
     cookies = get_browser_cookies()
 
     if cookies is None:
         return {"error": "Could not get cookies from any browser. Make sure you're logged into claude.ai in Chrome, Firefox, or Safari."}
 
     try:
-        # Try the API endpoint that the web app uses
         session = requests.Session()
         session.cookies = cookies
         session.headers.update({
@@ -91,71 +116,45 @@ def scrape_usage() -> dict:
             "Referer": "https://claude.ai/settings/usage",
         })
 
-        # Get the active org ID from cookies (lastActiveOrg)
-        org_id = None
-        for cookie in cookies:
-            if cookie.name == "lastActiveOrg":
-                org_id = cookie.value
-                break
+        # Always fetch all organizations
+        org_response = session.get("https://claude.ai/api/organizations")
+        if org_response.status_code in (401, 403):
+            return {"error": "Not authenticated. Please log into claude.ai in your browser first."}
+        if org_response.status_code != 200:
+            return {"error": f"Failed to fetch organizations (HTTP {org_response.status_code})"}
 
-        # Fall back to getting from API if cookie not found
-        if not org_id:
-            org_response = session.get("https://claude.ai/api/organizations")
-            if org_response.status_code == 401 or org_response.status_code == 403:
-                return {"error": "Not authenticated. Please log into claude.ai in your browser first."}
-            if org_response.status_code == 200:
-                orgs = org_response.json()
-                if orgs and len(orgs) > 0:
-                    org_id = orgs[0].get("uuid") or orgs[0].get("id")
+        orgs_list = org_response.json()
+        if not orgs_list:
+            return {"error": "No organizations found"}
 
-        if not org_id:
-            return {"error": "Could not determine organization ID"}
+        orgs_result = []
+        for org in orgs_list:
+            org_id = org.get("uuid") or org.get("id")
+            org_name = org.get("name") or org.get("display_name") or org_id
+            if not org_id:
+                continue
 
-        usage_data = {
-            "raw_texts": [],
-            "session": None,
-            "weekly": None,
-            "api_data": None,
-            "org_id": org_id,
-        }
+            org_entry = {
+                "id": org_id,
+                "name": org_name,
+                "session": None,
+                "weekly": None,
+            }
 
-        # Get usage data from the API
-        try:
-            resp = session.get(f"https://claude.ai/api/organizations/{org_id}/usage")
-            if resp.status_code == 200:
-                usage_data["api_data"] = resp.json()
-                usage_data["api_endpoint"] = f"https://claude.ai/api/organizations/{org_id}/usage"
-            elif resp.status_code == 401 or resp.status_code == 403:
-                return {"error": "Not authenticated. Please log into claude.ai in your browser."}
-        except Exception as e:
-            return {"error": f"API error: {e}"}
+            try:
+                resp = session.get(f"https://claude.ai/api/organizations/{org_id}/usage")
+                if resp.status_code == 200:
+                    parsed = _parse_org_usage(resp.json())
+                    org_entry["session"] = parsed["session"]
+                    org_entry["weekly"] = parsed["weekly"]
+                elif resp.status_code in (401, 403):
+                    return {"error": "Not authenticated. Please log into claude.ai in your browser."}
+            except Exception as e:
+                print(f"Warning: failed to fetch usage for org {org_name}: {e}", file=sys.stderr)
 
-        # Parse the API data if we got it
-        if usage_data.get("api_data"):
-            api = usage_data["api_data"]
+            orgs_result.append(org_entry)
 
-            # Session usage (5-hour window)
-            # Note: utilization is already a percentage (e.g., 4.0 = 4%)
-            if api.get("five_hour") and api["five_hour"].get("utilization") is not None:
-                usage_data["session"] = {
-                    "percent": api["five_hour"]["utilization"],
-                    "resets_at": api["five_hour"].get("resets_at"),
-                }
-
-            # Weekly usage (7-day) - check various fields
-            weekly_fields = ["seven_day", "seven_day_sonnet", "seven_day_opus"]
-            for field in weekly_fields:
-                if api.get(field) and isinstance(api[field], dict):
-                    if api[field].get("utilization") is not None:
-                        usage_data["weekly"] = {
-                            "percent": api[field]["utilization"],
-                            "resets_at": api[field].get("resets_at"),
-                            "source": field,
-                        }
-                        break
-
-            # Clear the garbage regex matches
-            usage_data["raw_texts"] = []
+        usage_data = {"orgs": orgs_result}
 
         # Cache the result
         CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
