@@ -33,8 +33,8 @@ class ClaudeUsage < Formula
   def install
     # Create virtualenv and install dependencies
     venv = virtualenv_create(libexec, "python3.13")
-    # Install curl_cffi from PyPI (needs prebuilt wheel with bundled native libs)
-    venv.pip_install "curl_cffi==0.14.0"
+    # Install curl_cffi from PyPI wheel (cannot build from source - bundles native libs)
+    system libexec/"bin"/"pip", "install", "--only-binary=curl_cffi", "curl_cffi==0.14.0"
     venv.pip_install resources
 
     # Copy plugin scripts into libexec (co-located with the venv)
