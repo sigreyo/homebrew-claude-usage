@@ -57,9 +57,14 @@ class ClaudeUsage < Formula
   def install
     # Create virtualenv and install dependencies
     venv = virtualenv_create(libexec, "python3.13")
-    # Install curl_cffi wheel manually (Homebrew's pip_install forces --no-binary)
-    whl = resource("curl_cffi_whl").cached_download
-    system libexec/"bin"/"pip", "install", "--no-deps", whl
+    # Install curl_cffi wheel manually (Homebrew's pip_install forces --no-binary
+    # and extracts zips). cached_download has a hash prefix that breaks pip's
+    # wheel filename validation, so we symlink to the original name.
+    cached_whl = resource("curl_cffi_whl").cached_download
+    original_name = cached_whl.basename.to_s.sub(/\A[0-9a-f]+--/, "")
+    tmp_whl = buildpath/original_name
+    ln_s cached_whl, tmp_whl
+    system libexec/"bin"/"pip", "install", "--no-deps", tmp_whl
     venv.pip_install resources
 
     # Copy plugin scripts into libexec (co-located with the venv)
