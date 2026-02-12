@@ -146,6 +146,8 @@ def scrape_usage() -> dict:
         # Always fetch all organizations
         org_response = session.get("https://claude.ai/api/organizations")
         if org_response.status_code in (401, 403):
+            print(f"Auth failed: HTTP {org_response.status_code}", file=sys.stderr)
+            print(f"Response: {org_response.text[:200]}", file=sys.stderr)
             if is_manual:
                 return {"error": "Session key expired. Run 'claude-usage-login' to set a new one."}
             return {"error": "Not authenticated. Please log into claude.ai in your browser first."}
