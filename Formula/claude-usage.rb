@@ -120,9 +120,59 @@ class ClaudeUsage < Formula
       exec "#{libexec}/bin/python3" "#{libexec}/scrape_usage.py" "$@"
     BASH
 
+    (bin/"claude-usage-login").write <<~BASH
+      #!/bin/bash
+      set -euo pipefail
+
+      CONFIG_DIR="${HOME}/.config/claude-usage"
+      CONFIG_FILE="${CONFIG_DIR}/config.json"
+
+      echo "Claude Usage - Manual Login"
+      echo "==========================="
+      echo ""
+      echo "This sets a session key for when automatic browser cookie detection doesn't work."
+      echo ""
+      echo "To find your session key:"
+      echo "  1. Open claude.ai in your browser and log in"
+      echo "  2. Open DevTools (F12 or Cmd+Option+I)"
+      echo "  3. Go to Application > Cookies > https://claude.ai"
+      echo "  4. Copy the value of the 'sessionKey' cookie"
+      echo ""
+      printf "Paste your sessionKey here: "
+      read -r SESSION_KEY
+
+      if [ -z "$SESSION_KEY" ]; then
+        echo "Error: No session key provided."
+        exit 1
+      fi
+
+      mkdir -p "$CONFIG_DIR"
+
+      # Update config.json, preserving existing keys
+      if [ -f "$CONFIG_FILE" ]; then
+        # Use python to merge into existing config
+        "#{libexec}/bin/python3" -c "
+import json, sys
+config = {}
+try:
+    config = json.loads(open('$CONFIG_FILE').read())
+except Exception:
+    pass
+config['session_key'] = sys.argv[1]
+open('$CONFIG_FILE', 'w').write(json.dumps(config, indent=2))
+" "$SESSION_KEY"
+      else
+        echo "{\\"session_key\\": \\"${SESSION_KEY}\\"}" > "$CONFIG_FILE"
+      fi
+
+      echo ""
+      echo "Session key saved! Run 'claude-usage-scrape' to verify it works."
+    BASH
+
     # Make wrapper scripts executable
     chmod 0755, bin/"claude-usage-setup"
     chmod 0755, bin/"claude-usage-scrape"
+    chmod 0755, bin/"claude-usage-login"
   end
 
   def caveats
