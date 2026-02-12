@@ -148,22 +148,19 @@ class ClaudeUsage < Formula
 
       mkdir -p "$CONFIG_DIR"
 
-      # Update config.json, preserving existing keys
-      if [ -f "$CONFIG_FILE" ]; then
-        # Use python to merge into existing config
-        "#{libexec}/bin/python3" -c "
-import json, sys
+      # Use python to safely write JSON (avoids shell mangling special chars)
+      printf '%s' "$SESSION_KEY" | "#{libexec}/bin/python3" -c "
+import json, sys, os
+config_path = sys.argv[1]
+session_key = sys.stdin.read().strip()
 config = {}
 try:
-    config = json.loads(open('$CONFIG_FILE').read())
+    config = json.loads(open(config_path).read())
 except Exception:
     pass
-config['session_key'] = sys.argv[1]
-open('$CONFIG_FILE', 'w').write(json.dumps(config, indent=2))
-" "$SESSION_KEY"
-      else
-        echo "{\\"session_key\\": \\"${SESSION_KEY}\\"}" > "$CONFIG_FILE"
-      fi
+config['session_key'] = session_key
+open(config_path, 'w').write(json.dumps(config, indent=2))
+" "$CONFIG_FILE"
 
       echo ""
       echo "Session key saved! Run 'claude-usage-scrape' to verify it works."
