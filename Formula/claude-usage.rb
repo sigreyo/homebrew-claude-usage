@@ -16,15 +16,15 @@ class ClaudeUsage < Formula
   end
 
   on_arm do
-    resource "curl_cffi" do
-      url "https://files.pythonhosted.org/packages/aa/f0/0f21e9688eaac85e705537b3a87a5588d0cefb2f09d83e83e0e8be93aa99/curl_cffi-0.14.0-cp39-abi3-macosx_14_0_arm64.whl"
+    resource "curl_cffi_whl" do
+      url "https://files.pythonhosted.org/packages/aa/f0/0f21e9688eaac85e705537b3a87a5588d0cefb2f09d83e83e0e8be93aa99/curl_cffi-0.14.0-cp39-abi3-macosx_14_0_arm64.whl", using: :nounzip
       sha256 "e35e89c6a69872f9749d6d5fda642ed4fc159619329e99d577d0104c9aad5893"
     end
   end
 
   on_intel do
-    resource "curl_cffi" do
-      url "https://files.pythonhosted.org/packages/ba/a3/0419bd48fce5b145cb6a2344c6ac17efa588f5b0061f212c88e0723da026/curl_cffi-0.14.0-cp39-abi3-macosx_15_0_x86_64.whl"
+    resource "curl_cffi_whl" do
+      url "https://files.pythonhosted.org/packages/ba/a3/0419bd48fce5b145cb6a2344c6ac17efa588f5b0061f212c88e0723da026/curl_cffi-0.14.0-cp39-abi3-macosx_15_0_x86_64.whl", using: :nounzip
       sha256 "5945478cd28ad7dfb5c54473bcfb6743ee1d66554d57951fdf8fc0e7d8cf4e45"
     end
   end
@@ -57,6 +57,10 @@ class ClaudeUsage < Formula
   def install
     # Create virtualenv and install dependencies
     venv = virtualenv_create(libexec, "python3.13")
+    # Install curl_cffi wheel manually (Homebrew's pip_install forces --no-binary)
+    resource("curl_cffi_whl").stage do
+      system libexec/"bin"/"pip", "install", "--no-deps", Dir["*.whl"].first
+    end
     venv.pip_install resources
 
     # Copy plugin scripts into libexec (co-located with the venv)
