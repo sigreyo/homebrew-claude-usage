@@ -75,14 +75,14 @@ def get_bar(percent: float, width: int = 10) -> str:
     return "█" * filled + "░" * empty
 
 def get_color(percent: float) -> str:
-    """Get color based on usage percentage - bright colors for visibility"""
+    """Get color based on usage percentage - visible on both light and dark themes"""
     if percent >= 90:
-        return "#FF3B30"  # Bright red
+        return "#D32F2F"  # Red
     elif percent >= 75:
-        return "#FF9500"  # Bright orange
+        return "#E65100"  # Orange
     elif percent >= 50:
-        return "#FFCC00"  # Bright yellow
-    return "#30D158"  # Bright green
+        return "#F9A825"  # Amber
+    return "#2E7D32"  # Dark green (visible on light backgrounds)
 
 def get_icon(percent: float) -> str:
     """Get SF Symbol icon based on usage percentage"""
