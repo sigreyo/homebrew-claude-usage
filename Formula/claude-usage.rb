@@ -58,9 +58,8 @@ class ClaudeUsage < Formula
     # Create virtualenv and install dependencies
     venv = virtualenv_create(libexec, "python3.13")
     # Install curl_cffi wheel manually (Homebrew's pip_install forces --no-binary)
-    resource("curl_cffi_whl").stage do
-      system libexec/"bin"/"pip", "install", "--no-deps", Dir["*.whl"].first
-    end
+    whl = resource("curl_cffi_whl").cached_download
+    system libexec/"bin"/"pip", "install", "--no-deps", whl
     venv.pip_install resources
 
     # Copy plugin scripts into libexec (co-located with the venv)
