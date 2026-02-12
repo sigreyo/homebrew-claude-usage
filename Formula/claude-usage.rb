@@ -15,21 +15,6 @@ class ClaudeUsage < Formula
     sha256 "ac726dd470482006e014ad384921ed6438c457018f4b3d204aea4281258b2120"
   end
 
-  resource "curl_cffi" do
-    url "https://files.pythonhosted.org/packages/9b/c9/0067d9a25ed4592b022d4558157fcdb6e123516083700786d38091688767/curl_cffi-0.14.0.tar.gz"
-    sha256 "5ffbc82e59f05008ec08ea432f0e535418823cda44178ee518906a54f27a5f0f"
-  end
-
-  resource "cffi" do
-    url "https://files.pythonhosted.org/packages/eb/56/b1ba7935a17738ae8453301356628e8147c79dbb825bcbc73dc7401f9846/cffi-2.0.0.tar.gz"
-    sha256 "44d1b5909021139fe36001ae048dbdde8214afa20200eda0f64c068cac5d5529"
-  end
-
-  resource "pycparser" do
-    url "https://files.pythonhosted.org/packages/1b/7d/92392ff7815c21062bea51aa7b87d45576f649f16458d78b7cf94b9ab2e6/pycparser-3.0.tar.gz"
-    sha256 "600f49d217304a5902ac3c37e1281c9fe94e4d0489de643a9504c5cdfdfc6b29"
-  end
-
   resource "browser-cookie3" do
     url "https://files.pythonhosted.org/packages/e0/e1/652adea0ce25948e613ef78294c8ceaf4b32844aae00680d3a1712dde444/browser_cookie3-0.20.1.tar.gz"
     sha256 "6d8d0744bf42a5327c951bdbcf77741db3455b8b4e840e18bab266d598368a12"
@@ -48,6 +33,8 @@ class ClaudeUsage < Formula
   def install
     # Create virtualenv and install dependencies
     venv = virtualenv_create(libexec, "python3.13")
+    # Install curl_cffi from PyPI (needs prebuilt wheel with bundled native libs)
+    venv.pip_install "curl_cffi==0.14.0"
     venv.pip_install resources
 
     # Copy plugin scripts into libexec (co-located with the venv)
