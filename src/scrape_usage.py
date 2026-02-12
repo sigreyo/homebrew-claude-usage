@@ -2,6 +2,7 @@
 """
 Scrape Claude.ai usage data using cookies from existing browser.
 No login required - uses cookies from Chrome/Safari/Firefox.
+Uses curl_cffi to impersonate Chrome TLS fingerprint (bypasses Cloudflare).
 """
 
 import json
@@ -9,25 +10,19 @@ import re
 import sys
 from pathlib import Path
 
-import requests
+from curl_cffi import requests
 
 CACHE_FILE = Path.home() / ".config/claude-usage/last_usage.json"
 CONFIG_FILE = Path.home() / ".config/claude-usage/config.json"
 
 
-def get_manual_cookies():
-    """Check if manual cookies are configured."""
+def get_manual_session_key():
+    """Check if a manual session key is configured."""
     if not CONFIG_FILE.exists():
         return None
     try:
         config = json.loads(CONFIG_FILE.read_text())
-        session_key = config.get("session_key")
-        if not session_key:
-            return None
-        return {
-            "sessionKey": session_key,
-            "cf_clearance": config.get("cf_clearance", ""),
-        }
+        return config.get("session_key")
     except Exception:
         return None
 
@@ -56,8 +51,11 @@ def get_browser_cookies():
             cookie_list = list(cookies)
             if cookie_list:
                 print(f"Using cookies from {name}", file=sys.stderr)
-                # Recreate the cookie jar (can only iterate once)
-                return browser_fn(domain_name="claude.ai")
+                # Extract sessionKey from the cookie jar
+                for c in cookie_list:
+                    if c.name == "sessionKey":
+                        return c.value
+                errors.append(f"  {name}: found cookies but no sessionKey")
             else:
                 errors.append(f"  {name}: no claude.ai cookies found")
         except Exception as e:
@@ -69,6 +67,7 @@ def get_browser_cookies():
             print(err, file=sys.stderr)
 
     return None
+
 
 def parse_usage_text(text: str) -> dict | None:
     """Parse usage text like '45.2K / 135K' or '67%'"""
@@ -129,35 +128,26 @@ def _parse_org_usage(api: dict) -> dict:
 
 def scrape_usage() -> dict:
     """Scrape usage from claude.ai for all organizations using browser cookies or manual session key"""
-    manual = get_manual_cookies()
+    session_key = get_manual_session_key()
+    is_manual = session_key is not None
 
-    if manual:
-        print("Using manual cookies from config", file=sys.stderr)
-        cookies = requests.cookies.RequestsCookieJar()
-        cookies.set("sessionKey", manual["sessionKey"], domain="claude.ai", path="/")
-        if manual.get("cf_clearance"):
-            cookies.set("cf_clearance", manual["cf_clearance"], domain=".claude.ai", path="/")
+    if session_key:
+        print("Using manual session key from config", file=sys.stderr)
     else:
-        cookies = get_browser_cookies()
+        session_key = get_browser_cookies()
 
-    if cookies is None:
+    if session_key is None:
         return {"error": "Could not get cookies from any browser. Run 'claude-usage-login' to set a session key manually."}
 
     try:
-        session = requests.Session()
-        session.cookies = cookies
-        session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Referer": "https://claude.ai/settings/usage",
-        })
+        session = requests.Session(impersonate="chrome")
+        session.cookies.set("sessionKey", session_key, domain="claude.ai")
 
         # Always fetch all organizations
         org_response = session.get("https://claude.ai/api/organizations")
         if org_response.status_code in (401, 403):
-            if manual:
-                return {"error": "Session expired. Run 'claude-usage-login' to set new cookies."}
+            if is_manual:
+                return {"error": "Session key expired. Run 'claude-usage-login' to set a new one."}
             return {"error": "Not authenticated. Please log into claude.ai in your browser first."}
         if org_response.status_code != 200:
             return {"error": f"Failed to fetch organizations (HTTP {org_response.status_code})"}
@@ -187,8 +177,8 @@ def scrape_usage() -> dict:
                     org_entry["session"] = parsed["session"]
                     org_entry["weekly"] = parsed["weekly"]
                 elif resp.status_code in (401, 403):
-                    if manual:
-                        return {"error": "Session expired. Run 'claude-usage-login' to set new cookies."}
+                    if is_manual:
+                        return {"error": "Session key expired. Run 'claude-usage-login' to set a new one."}
                     return {"error": "Not authenticated. Please log into claude.ai in your browser."}
             except Exception as e:
                 print(f"Warning: failed to fetch usage for org {org_name}: {e}", file=sys.stderr)

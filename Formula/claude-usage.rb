@@ -15,24 +15,19 @@ class ClaudeUsage < Formula
     sha256 "ac726dd470482006e014ad384921ed6438c457018f4b3d204aea4281258b2120"
   end
 
-  resource "charset-normalizer" do
-    url "https://files.pythonhosted.org/packages/13/69/33ddede1939fdd074bce5434295f38fae7136463422fe4fd3e0e89b98062/charset_normalizer-3.4.4.tar.gz"
-    sha256 "94537985111c35f28720e43603b8e7b43a6ecfb2ce1d3058bbe955b73404e21a"
+  resource "curl_cffi" do
+    url "https://files.pythonhosted.org/packages/9b/c9/0067d9a25ed4592b022d4558157fcdb6e123516083700786d38091688767/curl_cffi-0.14.0.tar.gz"
+    sha256 "5ffbc82e59f05008ec08ea432f0e535418823cda44178ee518906a54f27a5f0f"
   end
 
-  resource "idna" do
-    url "https://files.pythonhosted.org/packages/6f/6d/0703ccc57f3a7233505399edb88de3cbd678da106337b9fcde432b65ed60/idna-3.11.tar.gz"
-    sha256 "795dafcc9c04ed0c1fb032c2aa73654d8e8c5023a7df64a53f39190ada629902"
+  resource "cffi" do
+    url "https://files.pythonhosted.org/packages/eb/56/b1ba7935a17738ae8453301356628e8147c79dbb825bcbc73dc7401f9846/cffi-2.0.0.tar.gz"
+    sha256 "44d1b5909021139fe36001ae048dbdde8214afa20200eda0f64c068cac5d5529"
   end
 
-  resource "requests" do
-    url "https://files.pythonhosted.org/packages/c9/74/b3ff8e6c8446842c3f5c837e9c3dfcfe2018ea6ecef224c710c85ef728f4/requests-2.32.5.tar.gz"
-    sha256 "dbba0bac56e100853db0ea71b82b4dfd5fe2bf6d3754a8893c3af500cec7d7cf"
-  end
-
-  resource "urllib3" do
-    url "https://files.pythonhosted.org/packages/c7/24/5f1b3bdffd70275f6661c76461e25f024d5a38a46f04aaca912426a2b1d3/urllib3-2.6.3.tar.gz"
-    sha256 "1b62b6884944a57dbe321509ab94fd4d3b307075e0c2eae991ac71ee15ad38ed"
+  resource "pycparser" do
+    url "https://files.pythonhosted.org/packages/1b/7d/92392ff7815c21062bea51aa7b87d45576f649f16458d78b7cf94b9ab2e6/pycparser-3.0.tar.gz"
+    sha256 "600f49d217304a5902ac3c37e1281c9fe94e4d0489de643a9504c5cdfdfc6b29"
   end
 
   resource "browser-cookie3" do
@@ -132,16 +127,14 @@ class ClaudeUsage < Formula
       echo ""
       echo "This sets a session key for when automatic browser cookie detection doesn't work."
       echo ""
-      echo "To find your cookies:"
+      echo "To find your session key:"
       echo "  1. Open claude.ai in your browser and log in"
       echo "  2. Open DevTools (F12 or Cmd+Option+I)"
       echo "  3. Go to Application > Cookies > https://claude.ai"
-      echo "  4. Copy the values of 'sessionKey' and 'cf_clearance'"
+      echo "  4. Copy the value of 'sessionKey'"
       echo ""
       printf "Paste your sessionKey: "
       read -r SESSION_KEY
-      printf "Paste your cf_clearance: "
-      read -r CF_CLEARANCE
 
       if [ -z "$SESSION_KEY" ]; then
         echo "Error: No session key provided."
@@ -151,19 +144,16 @@ class ClaudeUsage < Formula
       mkdir -p "$CONFIG_DIR"
 
       # Use python to safely write JSON (avoids shell mangling special chars)
-      printf '%s\\n%s' "$SESSION_KEY" "$CF_CLEARANCE" | "#{libexec}/bin/python3" -c "
+      printf '%s' "$SESSION_KEY" | "#{libexec}/bin/python3" -c "
 import json, sys
 config_path = sys.argv[1]
-lines = sys.stdin.read().strip().split('\\n')
-session_key = lines[0].strip()
-cf_clearance = lines[1].strip() if len(lines) > 1 else ''
+session_key = sys.stdin.read().strip()
 config = {}
 try:
     config = json.loads(open(config_path).read())
 except Exception:
     pass
 config['session_key'] = session_key
-config['cf_clearance'] = cf_clearance
 open(config_path, 'w').write(json.dumps(config, indent=2))
 " "$CONFIG_FILE"
 
