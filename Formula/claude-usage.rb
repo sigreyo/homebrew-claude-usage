@@ -132,14 +132,16 @@ class ClaudeUsage < Formula
       echo ""
       echo "This sets a session key for when automatic browser cookie detection doesn't work."
       echo ""
-      echo "To find your session key:"
+      echo "To find your cookies:"
       echo "  1. Open claude.ai in your browser and log in"
       echo "  2. Open DevTools (F12 or Cmd+Option+I)"
       echo "  3. Go to Application > Cookies > https://claude.ai"
-      echo "  4. Copy the value of the 'sessionKey' cookie"
+      echo "  4. Copy the values of 'sessionKey' and 'cf_clearance'"
       echo ""
-      printf "Paste your sessionKey here: "
+      printf "Paste your sessionKey: "
       read -r SESSION_KEY
+      printf "Paste your cf_clearance: "
+      read -r CF_CLEARANCE
 
       if [ -z "$SESSION_KEY" ]; then
         echo "Error: No session key provided."
@@ -149,16 +151,19 @@ class ClaudeUsage < Formula
       mkdir -p "$CONFIG_DIR"
 
       # Use python to safely write JSON (avoids shell mangling special chars)
-      printf '%s' "$SESSION_KEY" | "#{libexec}/bin/python3" -c "
-import json, sys, os
+      printf '%s\\n%s' "$SESSION_KEY" "$CF_CLEARANCE" | "#{libexec}/bin/python3" -c "
+import json, sys
 config_path = sys.argv[1]
-session_key = sys.stdin.read().strip()
+lines = sys.stdin.read().strip().split('\\n')
+session_key = lines[0].strip()
+cf_clearance = lines[1].strip() if len(lines) > 1 else ''
 config = {}
 try:
     config = json.loads(open(config_path).read())
 except Exception:
     pass
 config['session_key'] = session_key
+config['cf_clearance'] = cf_clearance
 open(config_path, 'w').write(json.dumps(config, indent=2))
 " "$CONFIG_FILE"
 

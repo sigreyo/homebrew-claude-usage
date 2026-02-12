@@ -15,13 +15,19 @@ CACHE_FILE = Path.home() / ".config/claude-usage/last_usage.json"
 CONFIG_FILE = Path.home() / ".config/claude-usage/config.json"
 
 
-def get_manual_session_key():
-    """Check if a manual session key is configured."""
+def get_manual_cookies():
+    """Check if manual cookies are configured."""
     if not CONFIG_FILE.exists():
         return None
     try:
         config = json.loads(CONFIG_FILE.read_text())
-        return config.get("session_key")
+        session_key = config.get("session_key")
+        if not session_key:
+            return None
+        return {
+            "sessionKey": session_key,
+            "cf_clearance": config.get("cf_clearance", ""),
+        }
     except Exception:
         return None
 
@@ -123,12 +129,14 @@ def _parse_org_usage(api: dict) -> dict:
 
 def scrape_usage() -> dict:
     """Scrape usage from claude.ai for all organizations using browser cookies or manual session key"""
-    manual_key = get_manual_session_key()
+    manual = get_manual_cookies()
 
-    if manual_key:
-        print("Using manual session key from config", file=sys.stderr)
+    if manual:
+        print("Using manual cookies from config", file=sys.stderr)
         cookies = requests.cookies.RequestsCookieJar()
-        cookies.set("sessionKey", manual_key, domain="claude.ai", path="/")
+        cookies.set("sessionKey", manual["sessionKey"], domain="claude.ai", path="/")
+        if manual.get("cf_clearance"):
+            cookies.set("cf_clearance", manual["cf_clearance"], domain=".claude.ai", path="/")
     else:
         cookies = get_browser_cookies()
 
@@ -148,8 +156,8 @@ def scrape_usage() -> dict:
         # Always fetch all organizations
         org_response = session.get("https://claude.ai/api/organizations")
         if org_response.status_code in (401, 403):
-            if manual_key:
-                return {"error": "Session key expired. Run 'claude-usage-login' to set a new one."}
+            if manual:
+                return {"error": "Session expired. Run 'claude-usage-login' to set new cookies."}
             return {"error": "Not authenticated. Please log into claude.ai in your browser first."}
         if org_response.status_code != 200:
             return {"error": f"Failed to fetch organizations (HTTP {org_response.status_code})"}
@@ -179,8 +187,8 @@ def scrape_usage() -> dict:
                     org_entry["session"] = parsed["session"]
                     org_entry["weekly"] = parsed["weekly"]
                 elif resp.status_code in (401, 403):
-                    if manual_key:
-                        return {"error": "Session key expired. Run 'claude-usage-login' to set a new one."}
+                    if manual:
+                        return {"error": "Session expired. Run 'claude-usage-login' to set new cookies."}
                     return {"error": "Not authenticated. Please log into claude.ai in your browser."}
             except Exception as e:
                 print(f"Warning: failed to fetch usage for org {org_name}: {e}", file=sys.stderr)
