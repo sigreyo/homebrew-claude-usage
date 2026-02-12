@@ -65,7 +65,11 @@ class ClaudeUsage < Formula
       whl = Pathname.glob("*.whl").first || Pathname.glob("*curl_cffi*").first
       system "unzip", "-o", whl.to_s, "-d", site_packages
     end
-    venv.pip_install resources
+    resources.each do |r|
+      next if r.name == "curl_cffi_whl"
+
+      venv.pip_install r
+    end
 
     # Copy plugin scripts into libexec (co-located with the venv)
     libexec.install "src/claude-usage.5m.py"
